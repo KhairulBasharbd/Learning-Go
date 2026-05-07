@@ -5,24 +5,21 @@ import (
 	"net/http"
 
 	"nethttp-crud/internal/models"
-	"nethttp-crud/internal/store"
+	"nethttp-crud/internal/services"
 )
 
-// App acts as our "Controller". It holds all dependencies our handlers need.
-// Notice it is capitalized (Exported) so main.go can use it.
+// App acts as our "Controller". 
+// Notice it now depends on the SERVICE, not the STORE directly!
 type App struct {
-	store *store.BookStore
+	service *services.BookService
 }
 
-// NewApp is a constructor function to create our App struct.
-func NewApp(s *store.BookStore) *App {
-	return &App{store: s}
+func NewApp(s *services.BookService) *App {
+	return &App{service: s}
 }
 
 // ------------------------------------------------------------------
 // HELPER FUNCTIONS 
-// Notice these are lowercase. In Go, this means they are "Private" 
-// and can only be used inside the `handlers` package.
 // ------------------------------------------------------------------
 
 func sendJSON(w http.ResponseWriter, status int, data any) {
@@ -39,12 +36,11 @@ func sendError(w http.ResponseWriter, status int, message string) {
 
 // ------------------------------------------------------------------
 // HTTP HANDLERS 
-// Notice these are now Capitalized. They must be exported (public) 
-// so that `main.go` can access them to register them in the router.
 // ------------------------------------------------------------------
 
 func (a *App) ListBooksHandler(w http.ResponseWriter, r *http.Request) {
-	books := a.store.GetAll()
+	// The handler asks the service for data, not the database.
+	books := a.service.GetAllBooks()
 	if books == nil {
 		books = []models.Book{} 
 	}
@@ -54,7 +50,7 @@ func (a *App) ListBooksHandler(w http.ResponseWriter, r *http.Request) {
 func (a *App) GetBookHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	
-	book, exists := a.store.Get(id)
+	book, exists := a.service.GetBook(id)
 	if !exists {
 		sendError(w, http.StatusNotFound, "Book not found")
 		return
@@ -69,13 +65,11 @@ func (a *App) CreateBookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if book.ID == "" || book.Title == "" {
-		sendError(w, http.StatusBadRequest, "ID and Title are required")
-		return
-	}
-
-	if err := a.store.Create(book); err != nil {
-		sendError(w, http.StatusConflict, err.Error())
+	// Notice we removed the business logic (validation) from here.
+	// We just pass the struct to the service layer.
+	if err := a.service.CreateBook(book); err != nil {
+		// If the service returns an error (like "ID required"), we send it to the user.
+		sendError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -93,8 +87,8 @@ func (a *App) UpdateBookHandler(w http.ResponseWriter, r *http.Request) {
 
 	book.ID = id 
 
-	if err := a.store.Update(book); err != nil {
-		sendError(w, http.StatusNotFound, err.Error())
+	if err := a.service.UpdateBook(book); err != nil {
+		sendError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -104,7 +98,7 @@ func (a *App) UpdateBookHandler(w http.ResponseWriter, r *http.Request) {
 func (a *App) DeleteBookHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	
-	if err := a.store.Delete(id); err != nil {
+	if err := a.service.DeleteBook(id); err != nil {
 		sendError(w, http.StatusNotFound, err.Error())
 		return
 	}
