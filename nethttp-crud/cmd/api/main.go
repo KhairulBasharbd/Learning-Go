@@ -35,7 +35,7 @@ func main() {
 	// 6. Start the Server
 	port := ":8080"
 	fmt.Printf("Starting pure net/http server on http://localhost%s\n", port)
-	
+
 	err := http.ListenAndServe(port, mux)
 	if err != nil {
 		log.Fatalf("Server failed to start: %v", err)
